@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+torch
+transformers
+librosa
+numpy
+faster-whisper
+spacy
+soundfile
+imageio-ffmpeg
