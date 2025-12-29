@@ -1,15 +1,17 @@
 import { Button } from '@/components/ui/button';
-import { Mic, MessageCircle, TrendingUp, Clock } from 'lucide-react';
+import { Mic, MessageCircle, TrendingUp, Clock, Code, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
 import AnimatedBackground from './AnimatedBackground';
 
 const features = [
-  { icon: MessageCircle, label: 'Clarity of speech' },
-  { icon: TrendingUp, label: 'Confidence & tone' },
+  { icon: Mic, label: 'Clarity of speech' },
+  { icon: MessageCircle, label: 'Confidence & tone' },
   { icon: Clock, label: 'Speaking pace' },
-  { icon: Mic, label: 'Filler words & pauses' },
+  { icon: Code, label: 'Technical Clarity' },
+  { icon: TrendingUp, label: 'Personalized Coaching'},
+  { icon: Activity, label: 'Real-time Feedback' },
 ];
 
 export default function HeroSection() {
@@ -51,8 +53,8 @@ export default function HeroSection() {
           transition={{ duration: 0.7, delay: 0.1 }}
           className="text-5xl md:text-7xl font-bold tracking-tight mb-6"
         >
-          <span className="block">Master Your</span>
-          <span className="gradient-text">Interview Skills</span>
+          <span className="block">Interview the Future</span>
+          <span className="gradient-text">Before It Interviews You</span>
         </motion.h1>
 
         {/* Description */}
@@ -62,8 +64,7 @@ export default function HeroSection() {
           transition={{ duration: 0.7, delay: 0.2 }}
           className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-10"
         >
-          Practice interviews and get AI-powered feedback on your communication. 
-          Build confidence, one answer at a time.
+          Step into a real interview before the real one — a multimodal AI that listens, evaluates, scores, and coaches your communication and technical responses to make you placement-ready, one answer at a time.
         </motion.p>
 
         {/* Features */}
@@ -128,7 +129,7 @@ export default function HeroSection() {
           transition={{ duration: 0.7, delay: 0.7 }}
           className="mt-6 text-sm text-muted-foreground"
         >
-          This tool evaluates communication only, not knowledge or intelligence.
+          This tool listens, evaluates, scores, and coaches your communication performance.
         </motion.p>
       </div>
     </section>
