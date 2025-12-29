@@ -67,13 +67,20 @@ export default function InterviewQuestion() {
   const hasMultipleQuestions = questions.length > 1;
 
   const showCodeEditor = rounds.includes('coding') || rounds.includes('dsa');
+  const progressPercent = questions.length
+    ? Math.round(((questionIndex + 1) / questions.length) * 100)
+    : 0;
 
   /* ---------------- AUDIO STATE ---------------- */
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [pendingAudioBlob, setPendingAudioBlob] = useState<Blob | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  const hasPendingAudio = Boolean(pendingAudioBlob);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -82,6 +89,10 @@ export default function InterviewQuestion() {
   /* ---------------- START RECORDING ---------------- */
 
   const startRecording = async () => {
+    setEvaluationError(null);
+    setPendingAudioBlob(null);
+    setAudioUrl(null);
+    setPendingQuestion(null);
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
     audioChunksRef.current = [];
@@ -95,7 +106,8 @@ export default function InterviewQuestion() {
     recorder.onstop = async () => {
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
       setAudioUrl(URL.createObjectURL(audioBlob));
-      await sendAudioToBackend(audioBlob);
+      setPendingAudioBlob(audioBlob);
+      setPendingQuestion(question);
       stream.getTracks().forEach((t) => t.stop());
     };
 
@@ -118,26 +130,31 @@ export default function InterviewQuestion() {
 
   /* ---------------- AUDIO FILE UPLOAD ---------------- */
 
-  const handleAudioUpload = async (
+  const handleAudioUpload = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
+    setEvaluationError(null);
     setAudioUrl(URL.createObjectURL(file));
-    await sendAudioToBackend(file);
-    setIsUploading(false);
+    setPendingAudioBlob(file);
+    setPendingQuestion(question);
   };
 
   /* ---------------- BACKEND CALL ---------------- */
 
-  const sendAudioToBackend = async (audioBlob: Blob) => {
+  const sendAudioToBackend = async (audioBlob: Blob, questionText: string) => {
     try {
+      setIsEvaluating(true);
+      setEvaluationError(null);
       const formData = new FormData();
-      const audioFile = new File([audioBlob], 'answer.webm', { type: 'audio/webm' });
-      formData.append('audio', audioFile);
-      formData.append('questions', JSON.stringify([question]));
+      const audioFile =
+        audioBlob instanceof File
+          ? audioBlob
+          : new File([audioBlob], 'answer.webm', { type: 'audio/webm' });
+      formData.append('audio', audioFile, audioFile.name);
+      formData.append('questions', JSON.stringify([questionText]));
 
       const res = await fetch(`${API_BASE_URL}/api/interview/evaluate`, {
         method: 'POST',
@@ -151,13 +168,30 @@ export default function InterviewQuestion() {
       // Persist results so feedback page can load them
       sessionStorage.setItem('interviewResults', JSON.stringify(result));
 
+      // Clear pending data once processing completes successfully
+      setPendingAudioBlob(null);
+      setPendingQuestion(null);
+      setAudioUrl(null);
+
       // Preserve existing query params (role, rounds, etc.) when moving to feedback
       const params = new URLSearchParams(searchParams);
       navigate(`/interview/feedback?${params.toString()}`);
 
     } catch (err) {
       console.error('Backend error:', err);
+      setEvaluationError('Evaluation failed. Please try again.');
+    } finally {
+      setIsEvaluating(false);
     }
+  };
+
+  const handleEvaluateInterview = async () => {
+    if (!pendingAudioBlob) {
+      setEvaluationError('Record or upload audio before evaluating.');
+      return;
+    }
+    const questionForEvaluation = pendingQuestion || question;
+    await sendAudioToBackend(pendingAudioBlob, questionForEvaluation);
   };
 
   /* ---------------- CODE SUBMIT ---------------- */
@@ -196,6 +230,20 @@ export default function InterviewQuestion() {
     return 'HR / Behavioral';
   };
 
+  const getAudioStatus = () => {
+    if (isRecording) return 'Recording in progress';
+    if (hasPendingAudio && !isEvaluating) return 'Response ready to evaluate';
+    if (isEvaluating) return 'Evaluating answer';
+    return 'Awaiting your response';
+  };
+  const audioStatus = getAudioStatus();
+  const statusDotClass = (() => {
+    if (isRecording) return 'bg-red-400 animate-pulse';
+    if (isEvaluating) return 'bg-amber-300 animate-pulse';
+    if (hasPendingAudio) return 'bg-emerald-400';
+    return 'bg-muted-foreground/40';
+  })();
+
   /* ---------------- CLEANUP ---------------- */
 
   useEffect(() => {
@@ -211,21 +259,24 @@ export default function InterviewQuestion() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),_transparent_55%)]">
         <Navbar />
 
-        <main className="pt-24 px-4 max-w-4xl mx-auto">
+        <main className="pt-24 pb-16 px-4 max-w-4xl mx-auto">
           <Button variant="ghost" onClick={() => navigate(-1)}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
 
           <div className="text-center my-8">
-            <span className="px-3 py-1 rounded-full bg-secondary text-sm">
+            <span className="px-4 py-1.5 rounded-full bg-secondary/70 text-xs font-semibold tracking-wide uppercase text-foreground/80">
               {getRoundLabel()}
             </span>
-            <h1 className="text-3xl font-bold mt-4">
+            <h1 className="text-3xl font-bold mt-4 text-foreground">
               {isRecording ? 'Recording...' : 'Interview Question'}
             </h1>
+            <p className="mt-2 text-base text-muted-foreground max-w-2xl mx-auto">
+              Stay focused and speak naturally. You can re-record or upload a file, then evaluate when ready.
+            </p>
           </div>
 
           <div className="flex items-center justify-between mb-4">
@@ -255,8 +306,24 @@ export default function InterviewQuestion() {
             </div>
           </div>
 
-          <Card className="mb-8">
-            <CardContent className="py-8 text-center text-xl">
+          <div className="mb-8">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <span>Progress</span>
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-muted/30 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-primary via-sky-400 to-cyan-300 transition-[width] duration-500 ease-out"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+
+          <Card className="mb-8 border border-primary/20 shadow-xl shadow-primary/10 bg-gradient-to-br from-card/95 via-background/80 to-card/95">
+            <CardContent className="py-10 px-6 text-center text-xl relative">
+              <span className="absolute inset-x-10 top-4 text-xs tracking-[0.3em] uppercase text-primary/60">
+                Active Question
+              </span>
               "{question}"
             </CardContent>
           </Card>
@@ -270,27 +337,33 @@ export default function InterviewQuestion() {
             )}
           </AnimatePresence>
 
-          {/* AUDIO CONTROLS */}
-          <div className="mt-10 space-y-6 text-center">
-            <div className="font-mono text-xl">{formatTime(recordingTime)}</div>
+          <div className="mt-10 space-y-6 text-center rounded-3xl border border-border/40 bg-card/70 backdrop-blur-md p-8 shadow-xl shadow-primary/10">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-muted/50 text-xs font-semibold tracking-wide uppercase text-muted-foreground">
+              <span className={`h-2 w-2 rounded-full ${statusDotClass}`} />
+              {audioStatus}
+            </div>
+
+            <div className="font-mono text-3xl text-foreground">
+              {formatTime(recordingTime)}
+            </div>
 
             {isRecording ? (
-              <Button variant="destructive" onClick={stopRecording}>
+              <Button variant="destructive" onClick={stopRecording} className="shadow-md shadow-rose-400/30">
                 <Square className="mr-2" /> Stop Recording
               </Button>
             ) : (
-              <Button onClick={startRecording} className="gradient-bg">
+              <Button
+                onClick={startRecording}
+                className="gradient-bg shadow-lg shadow-primary/40 hover:shadow-primary/60"
+              >
                 <Mic className="mr-2" /> Start Recording
               </Button>
             )}
 
-            {/* UPLOAD OPTION */}
             <div className="pt-4">
               <label className="inline-flex items-center gap-2 cursor-pointer">
                 <Upload className="h-5 w-5" />
-                <span className="font-medium">
-                  Upload audio file
-                </span>
+                <span className="font-medium">Upload audio file</span>
                 <input
                   type="file"
                   accept="audio/*"
@@ -300,15 +373,27 @@ export default function InterviewQuestion() {
               </label>
             </div>
 
-            {isUploading && (
-              <p className="text-sm text-muted-foreground">
-                Uploading & evaluating...
-              </p>
+            {audioUrl && (
+              <audio controls className="w-full mt-4 rounded-2xl border border-border/40" src={audioUrl} />
             )}
 
-            {audioUrl && (
-              <audio controls className="w-full mt-4" src={audioUrl} />
-            )}
+            <div className="pt-4 space-y-3">
+              <Button
+                onClick={handleEvaluateInterview}
+                disabled={!hasPendingAudio || isEvaluating}
+                className="w-full sm:w-auto bg-gradient-to-r from-primary via-sky-500 to-cyan-400 text-primary-foreground shadow-lg shadow-sky-500/30 hover:opacity-95"
+              >
+                {isEvaluating ? 'Evaluating...' : 'Evaluate Interview'}
+              </Button>
+              {evaluationError && (
+                <p className="text-sm text-destructive">{evaluationError}</p>
+              )}
+              {!hasPendingAudio && (
+                <p className="text-sm text-muted-foreground">
+                  Record or upload audio before evaluating.
+                </p>
+              )}
+            </div>
           </div>
         </main>
       </div>
