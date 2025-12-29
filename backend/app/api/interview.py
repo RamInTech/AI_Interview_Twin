@@ -1,5 +1,11 @@
+import json
+import os
+import tempfile
+from typing import List
+
 from fastapi import APIRouter, UploadFile, File, Form
 from pydantic import BaseModel
+
 from app.services.interview_evaluator import evaluate_interview
 from app.services.question_service import generate_interview_questions
 from app.schemas.question import QuestionGenerationRequest
@@ -25,8 +31,27 @@ async def generate_questions_endpoint(request: GenerateQuestionsRequest):
 
 @router.post("/evaluate")
 async def evaluate(audio: UploadFile = File(...), questions: str = Form(...)):
-    path = f"/tmp/{audio.filename}"
+    tmp_dir = tempfile.mkdtemp(prefix="interview-")
+    filename = audio.filename or "answer.webm"
+    path = os.path.join(tmp_dir, filename)
+
     with open(path, "wb") as f:
         f.write(await audio.read())
 
-    return evaluate_interview(path, questions)
+    try:
+        parsed: List[str]
+        data = json.loads(questions)
+        if isinstance(data, list):
+            parsed = [str(q) for q in data]
+        else:
+            parsed = [str(data)]
+    except json.JSONDecodeError:
+        parsed = [questions]
+
+    try:
+        return evaluate_interview(path, parsed)
+    finally:
+        try:
+            os.remove(path)
+        finally:
+            os.rmdir(tmp_dir)
