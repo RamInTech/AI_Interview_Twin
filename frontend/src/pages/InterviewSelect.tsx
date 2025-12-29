@@ -5,59 +5,69 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, Code, ArrowRight, ArrowLeft, Check, Briefcase, Brain, MessageSquare, Terminal } from 'lucide-react';
+import {
+  Users,
+  Code,
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  Briefcase,
+  Brain,
+  MessageSquare,
+  Terminal,
+} from 'lucide-react';
 import Navbar from '@/components/landing/Navbar';
 import PageTransition from '@/components/PageTransition';
+import { interviewApi, ApiError } from '@/lib/api';
 
 const roles = [
-  { id: 'sde', label: 'Software Development Engineer (SDE)' },
-  { id: 'frontend', label: 'Frontend Developer' },
-  { id: 'backend', label: 'Backend Developer' },
-  { id: 'fullstack', label: 'Full Stack Developer' },
-  { id: 'data-analyst', label: 'Data Analyst' },
-  { id: 'ml-engineer', label: 'Machine Learning Engineer' },
-  { id: 'communication', label: 'Communication Skills Interview' },
+  { id: 'Software Development Engineer', label: 'Software Development Engineer (SDE)' },
+  { id: 'Frontend Developer', label: 'Frontend Developer' },
+  { id: 'Backend Developer', label: 'Backend Developer' },
+  { id: 'Full Stack Developer', label: 'Full Stack Developer' },
+  { id: 'Data Analyst', label: 'Data Analyst' },
+  { id: 'Machine Learning Engineer', label: 'Machine Learning Engineer' },
+  { id: 'Communication', label: 'Communication Skills Interview' },
 ];
 
 const experienceLevels = [
-  { id: 'fresher', label: 'Fresher' },
-  { id: '1-3', label: '1–3 Years' },
-  { id: '3+', label: '3+ Years' },
+  { id: 'Fresher', label: 'Fresher' },
+  { id: '1-3 Years', label: '1–3 Years' },
+  { id: '3+ Years', label: '3+ Years' },
 ];
 
 const interviewRounds = [
   {
-    id: 'hr',
+    id: 'HR',
     title: 'HR / Behavioral',
     description: 'Practice answering questions about your experience, teamwork, and soft skills.',
     icon: Users,
     evaluates: ['Communication clarity', 'Storytelling ability', 'Confidence level', 'Answer structure'],
   },
   {
-    id: 'technical',
+    id: 'Technical',
     title: 'Technical Interview',
     description: 'Explain technical concepts and problem-solving approaches clearly.',
     icon: Code,
     evaluates: ['Explanation clarity', 'Technical communication', 'Logical flow', 'Engagement level'],
   },
   {
-    id: 'dsa',
+    id: 'DSA',
     title: 'DSA Round',
     description: 'Solve data structure and algorithm problems with optimal solutions.',
     icon: Brain,
     evaluates: ['Problem solving', 'Code optimization', 'Time complexity', 'Space complexity'],
   },
   {
-    id: 'coding',
+    id: 'Coding',
     title: 'Coding Round',
     description: 'Write clean, efficient code to solve real-world programming challenges.',
     icon: Terminal,
     evaluates: ['Code quality', 'Logic building', 'Edge case handling', 'Best practices'],
   },
   {
-    id: 'communication',
+    id: 'Communication',
     title: 'Communication Round',
     description: 'Demonstrate your verbal and written communication skills effectively.',
     icon: MessageSquare,
@@ -66,16 +76,16 @@ const interviewRounds = [
 ];
 
 const programmingLanguages = [
-  { id: 'cpp', label: 'C++' },
-  { id: 'java', label: 'Java' },
-  { id: 'python', label: 'Python' },
-  { id: 'javascript', label: 'JavaScript' },
+  { id: 'C++', label: 'C++' },
+  { id: 'Java', label: 'Java' },
+  { id: 'Python', label: 'Python' },
+  { id: 'JavaScript', label: 'JavaScript' },
 ];
 
 const difficultyLevels = [
-  { id: 'easy', label: 'Easy' },
-  { id: 'medium', label: 'Medium' },
-  { id: 'hard', label: 'Hard' },
+  { id: 'Easy', label: 'Easy' },
+  { id: 'Medium', label: 'Medium' },
+  { id: 'Hard', label: 'Hard' },
 ];
 
 const communicationModes = [
@@ -113,21 +123,23 @@ const listItemVariants = {
 
 const fieldVariants = {
   hidden: { opacity: 0, height: 0, marginTop: 0 },
-  visible: { 
-    opacity: 1, 
-    height: 'auto', 
+  visible: {
+    opacity: 1,
+    height: 'auto',
     marginTop: 24,
-    transition: { duration: 0.3, ease: 'easeOut' as const }
+    transition: { duration: 0.3, ease: 'easeOut' as const },
   },
-  exit: { 
-    opacity: 0, 
-    height: 0, 
+  exit: {
+    opacity: 0,
+    height: 0,
     marginTop: 0,
-    transition: { duration: 0.2, ease: 'easeIn' as const }
+    transition: { duration: 0.2, ease: 'easeIn' as const },
   },
 };
 
 export default function InterviewSelect() {
+  const navigate = useNavigate();
+
   const [selectedRole, setSelectedRole] = useState<string>('');
   const [experienceLevel, setExperienceLevel] = useState<string>('');
   const [selectedRounds, setSelectedRounds] = useState<string[]>([]);
@@ -135,25 +147,53 @@ export default function InterviewSelect() {
   const [programmingLanguage, setProgrammingLanguage] = useState<string>('');
   const [difficulty, setDifficulty] = useState<string>('');
   const [communicationMode, setCommunicationMode] = useState<string>('');
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+
+  const showCodingOptions =
+    selectedRounds.includes('DSA') || selectedRounds.includes('Coding');
+  const showCommunicationOptions = selectedRounds.includes('Communication');
+
+  const canContinue =
+    selectedRole &&
+    experienceLevel &&
+    selectedRounds.length > 0 &&
+    (!showCodingOptions || (programmingLanguage && difficulty)) &&
+    (!showCommunicationOptions || communicationMode);
 
   const handleRoundToggle = (roundId: string) => {
-    setSelectedRounds(prev => 
-      prev.includes(roundId) 
-        ? prev.filter(id => id !== roundId)
+    setSelectedRounds((prev) =>
+      prev.includes(roundId)
+        ? prev.filter((id) => id !== roundId)
         : [...prev, roundId]
     );
   };
 
-  const showCodingOptions = selectedRounds.includes('dsa') || selectedRounds.includes('coding');
-  const showCommunicationOptions = selectedRounds.includes('communication');
+  const handleContinue = async () => {
+    if (!canContinue || loading) return;
 
-  const canContinue = selectedRole && experienceLevel && selectedRounds.length > 0 &&
-    (!showCodingOptions || (programmingLanguage && difficulty)) &&
-    (!showCommunicationOptions || communicationMode);
+    setLoading(true);
 
-  const handleContinue = () => {
-    if (canContinue) {
+    try {
+      const interviewRound =
+        selectedRounds.includes('DSA')
+          ? 'DSA'
+          : selectedRounds.includes('Coding')
+          ? 'Coding'
+          : selectedRounds.includes('Technical')
+          ? 'Technical'
+          : selectedRounds.includes('Communication')
+          ? 'Communication'
+          : 'HR';
+
+      const payload = {
+        role: selectedRole,
+        experience: experienceLevel,
+        company_type: 'Service-Based',
+        interview_round: interviewRound,
+      };
+
+      const data = await interviewApi.generateQuestions(payload);
+
       const params = new URLSearchParams({
         role: selectedRole,
         experience: experienceLevel,
@@ -162,7 +202,16 @@ export default function InterviewSelect() {
         ...(difficulty && { difficulty }),
         ...(communicationMode && { communicationMode }),
       });
-      navigate(`/interview/setup?${params.toString()}`);
+
+      params.set('questions', JSON.stringify(data.questions));
+
+      navigate(`/interview/question?${params.toString()}`);
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof ApiError ? err.message : 'Failed to generate questions. Please try again.';
+      alert(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -170,7 +219,7 @@ export default function InterviewSelect() {
     <PageTransition>
       <div className="min-h-screen bg-background">
         <Navbar />
-        
+
         <main className="pt-24 pb-16 px-4">
           <div className="max-w-4xl mx-auto">
             <motion.div
@@ -194,7 +243,7 @@ export default function InterviewSelect() {
               </Button>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               className="text-center mb-12"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -206,7 +255,6 @@ export default function InterviewSelect() {
               </p>
             </motion.div>
 
-            {/* Role Selection */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -231,7 +279,7 @@ export default function InterviewSelect() {
                       <SelectValue placeholder="Select a role..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {roles.map(role => (
+                      {roles.map((role) => (
                         <SelectItem key={role.id} value={role.id}>
                           {role.label}
                         </SelectItem>
@@ -242,7 +290,6 @@ export default function InterviewSelect() {
               </Card>
             </motion.div>
 
-            {/* Experience Level */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -255,12 +302,12 @@ export default function InterviewSelect() {
                   <CardDescription>Select your years of experience</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <RadioGroup 
-                    value={experienceLevel} 
+                  <RadioGroup
+                    value={experienceLevel}
                     onValueChange={setExperienceLevel}
                     className="flex flex-wrap gap-4"
                   >
-                    {experienceLevels.map(level => (
+                    {experienceLevels.map((level) => (
                       <div key={level.id} className="flex items-center space-x-2">
                         <RadioGroupItem value={level.id} id={`exp-${level.id}`} />
                         <Label htmlFor={`exp-${level.id}`} className="cursor-pointer">
@@ -273,7 +320,6 @@ export default function InterviewSelect() {
               </Card>
             </motion.div>
 
-            {/* Interview Rounds */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -282,7 +328,7 @@ export default function InterviewSelect() {
             >
               <h2 className="text-xl font-semibold mb-4">Select Interview Rounds</h2>
               <p className="text-muted-foreground mb-6">Choose one or more rounds to practice</p>
-              
+
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {interviewRounds.map(({ id, title, description, icon: Icon, evaluates }, index) => (
                   <motion.div
@@ -306,7 +352,7 @@ export default function InterviewSelect() {
                     >
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
-                          <motion.div 
+                          <motion.div
                             className={`h-10 w-10 rounded-lg flex items-center justify-center transition-colors duration-300 ${
                               selectedRounds.includes(id) ? 'gradient-bg' : 'bg-secondary'
                             }`}
@@ -315,16 +361,20 @@ export default function InterviewSelect() {
                             animate={hoveredCard === id || selectedRounds.includes(id) ? 'hover' : 'idle'}
                             whileTap="tap"
                           >
-                            <Icon className={`h-5 w-5 transition-colors duration-300 ${
-                              selectedRounds.includes(id) ? 'text-primary-foreground' : 'text-secondary-foreground'
-                            }`} />
+                            <Icon
+                              className={`h-5 w-5 transition-colors duration-300 ${
+                                selectedRounds.includes(id)
+                                  ? 'text-primary-foreground'
+                                  : 'text-secondary-foreground'
+                              }`}
+                            />
                           </motion.div>
-                          
+
                           <motion.div
                             initial={{ scale: 0, opacity: 0 }}
-                            animate={{ 
-                              scale: selectedRounds.includes(id) ? 1 : 0, 
-                              opacity: selectedRounds.includes(id) ? 1 : 0 
+                            animate={{
+                              scale: selectedRounds.includes(id) ? 1 : 0,
+                              opacity: selectedRounds.includes(id) ? 1 : 0,
                             }}
                             transition={{ type: 'spring', stiffness: 500, damping: 25 }}
                             className="h-5 w-5 rounded-full gradient-bg flex items-center justify-center"
@@ -339,18 +389,21 @@ export default function InterviewSelect() {
                         <p className="text-xs font-medium text-muted-foreground mb-2">We'll evaluate:</p>
                         <ul className="space-y-1">
                           {evaluates.slice(0, 3).map((item, i) => (
-                            <motion.li 
-                              key={item} 
+                            <motion.li
+                              key={item}
                               className="text-xs flex items-center gap-2"
                               custom={i}
                               variants={listItemVariants}
                               initial="hidden"
                               animate={hoveredCard === id || selectedRounds.includes(id) ? 'visible' : 'hidden'}
                             >
-                              <motion.span 
+                              <motion.span
                                 className="h-1 w-1 rounded-full bg-primary"
-                                animate={{ 
-                                  scale: hoveredCard === id || selectedRounds.includes(id) ? [1, 1.5, 1] : 1 
+                                animate={{
+                                  scale:
+                                    hoveredCard === id || selectedRounds.includes(id)
+                                      ? [1, 1.5, 1]
+                                      : 1,
                                 }}
                                 transition={{ delay: i * 0.05, duration: 0.3 }}
                               />
@@ -365,7 +418,6 @@ export default function InterviewSelect() {
               </div>
             </motion.div>
 
-            {/* Conditional: Programming Language & Difficulty */}
             <AnimatePresence>
               {showCodingOptions && (
                 <motion.div
@@ -388,7 +440,7 @@ export default function InterviewSelect() {
                             <SelectValue placeholder="Select language..." />
                           </SelectTrigger>
                           <SelectContent>
-                            {programmingLanguages.map(lang => (
+                            {programmingLanguages.map((lang) => (
                               <SelectItem key={lang.id} value={lang.id}>
                                 {lang.label}
                               </SelectItem>
@@ -398,12 +450,12 @@ export default function InterviewSelect() {
                       </div>
                       <div>
                         <Label className="mb-3 block">Difficulty Level</Label>
-                        <RadioGroup 
-                          value={difficulty} 
+                        <RadioGroup
+                          value={difficulty}
                           onValueChange={setDifficulty}
                           className="flex flex-wrap gap-4"
                         >
-                          {difficultyLevels.map(level => (
+                          {difficultyLevels.map((level) => (
                             <div key={level.id} className="flex items-center space-x-2">
                               <RadioGroupItem value={level.id} id={`diff-${level.id}`} />
                               <Label htmlFor={`diff-${level.id}`} className="cursor-pointer">
@@ -419,7 +471,6 @@ export default function InterviewSelect() {
               )}
             </AnimatePresence>
 
-            {/* Conditional: Communication Mode */}
             <AnimatePresence>
               {showCommunicationOptions && (
                 <motion.div
@@ -435,12 +486,12 @@ export default function InterviewSelect() {
                       <CardDescription>Choose how you'd like to communicate</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <RadioGroup 
-                        value={communicationMode} 
+                      <RadioGroup
+                        value={communicationMode}
                         onValueChange={setCommunicationMode}
                         className="flex flex-wrap gap-4"
                       >
-                        {communicationModes.map(mode => (
+                        {communicationModes.map((mode) => (
                           <div key={mode.id} className="flex items-center space-x-2">
                             <RadioGroupItem value={mode.id} id={`comm-${mode.id}`} />
                             <Label htmlFor={`comm-${mode.id}`} className="cursor-pointer">
@@ -455,27 +506,26 @@ export default function InterviewSelect() {
               )}
             </AnimatePresence>
 
-            {/* Action Button */}
-            <motion.div 
+            <motion.div
               className="flex justify-center mt-10"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.4 }}
             >
               <motion.div
-                whileHover={{ scale: canContinue ? 1.02 : 1 }}
-                whileTap={{ scale: canContinue ? 0.98 : 1 }}
+                whileHover={{ scale: canContinue && !loading ? 1.02 : 1 }}
+                whileTap={{ scale: canContinue && !loading ? 0.98 : 1 }}
               >
                 <Button
                   size="lg"
                   onClick={handleContinue}
-                  disabled={!canContinue}
+                  disabled={!canContinue || loading}
                   className="gradient-bg text-primary-foreground font-semibold px-8"
                 >
-                  Start Interview
+                  {loading ? 'Generating Questions...' : 'Start Interview'}
                   <motion.span
-                    animate={{ x: canContinue ? [0, 4, 0] : 0 }}
-                    transition={{ repeat: canContinue ? Infinity : 0, duration: 1.5, ease: 'easeInOut' }}
+                    animate={{ x: !loading && canContinue ? [0, 4, 0] : 0 }}
+                    transition={{ repeat: !loading && canContinue ? Infinity : 0, duration: 1.5, ease: 'easeInOut' }}
                   >
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </motion.span>
