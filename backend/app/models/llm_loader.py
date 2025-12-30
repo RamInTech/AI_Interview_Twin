@@ -6,7 +6,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from app.utils.device import detect_device
 from app.config import HF_TOKEN
 
-MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
+TCS_MODEL_NAME = "google/gemma-2-2b-it"
 
 _tokenizer = None
 _model = None
