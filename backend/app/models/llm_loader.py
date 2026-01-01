@@ -6,7 +6,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from app.utils.device import detect_device
 from app.config import HF_TOKEN
 
-TCS_MODEL_NAME = "google/gemma-2-2b-it"
+TCS_MODEL_NAME = "meta-llama/Llama-3.2-3B-Instruct"
 
 _tokenizer = None
 _model = None
@@ -25,7 +25,7 @@ def load_tcs_model():
     device = detect_device()
 
     _tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_NAME,
+        TCS_MODEL_NAME,
         use_fast=True,
         token=hf_token
     )
@@ -41,7 +41,7 @@ def load_tcs_model():
         device_map = None
 
     _model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
+        TCS_MODEL_NAME,
         torch_dtype=dtype,
         device_map=device_map,
         token=hf_token
