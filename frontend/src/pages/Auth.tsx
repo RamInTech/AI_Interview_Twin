@@ -64,19 +64,14 @@ export default function Auth() {
       if (isSignUp) {
         const { error } = await signUp(email, password, fullName);
         if (error) {
-          if (error.message.includes('already registered')) {
-            toast({
-              title: 'Account exists',
-              description: 'This email is already registered. Please sign in instead.',
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: 'Sign up failed',
-              description: error.message,
-              variant: 'destructive',
-            });
-          }
+          const alreadyExists = error.message.includes('auth/email-already-in-use');
+          toast({
+            title: alreadyExists ? 'Account exists' : 'Sign up failed',
+            description: alreadyExists
+              ? 'This email is already registered. Please sign in instead.'
+              : error.message,
+            variant: 'destructive',
+          });
         } else {
           toast({
             title: 'Welcome!',
@@ -86,9 +81,14 @@ export default function Auth() {
       } else {
         const { error } = await signIn(email, password);
         if (error) {
+          const invalidCredentials = error.message.includes('auth/invalid-credential') ||
+            error.message.includes('auth/invalid-email') ||
+            error.message.includes('auth/user-not-found');
           toast({
             title: 'Sign in failed',
-            description: 'Invalid email or password. Please try again.',
+            description: invalidCredentials
+              ? 'Invalid email or password. Please try again.'
+              : error.message,
             variant: 'destructive',
           });
         }
