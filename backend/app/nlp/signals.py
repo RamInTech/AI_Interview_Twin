@@ -27,26 +27,31 @@ def detect_signals(transcript: str, segments: List[Dict]) -> Dict:
         for token in doc:
             t = token.text.lower()
 
+            # Fillers
             if t in FILLERS_SIMPLE:
                 filler_count += 1
 
             if t == "like" and token.pos_ == "INTJ":
                 filler_count += 1
 
+            # Hedging (token-level)
             if t in HEDGE_KEYWORDS:
                 hedge_count += 1
 
             if t == "think" and token.head.text.lower() == "i":
                 hedge_count += 1
 
+            # Ownership (broader patterns)
             if token.lemma_ in OWNERSHIP_VERBS:
                 if any(tok.text.lower() == "i" for tok in token.subtree):
                     own_count += 1
 
+            # Passive (evasive only)
             if token.dep_ == "auxpass":
                 if not any(tok.text.lower() == "i" for tok in token.head.subtree):
                     passive_count += 1
 
+        # Phrase-level signals
         for f in MULTI_FILLERS:
             filler_count += text_lower.count(f)
 
@@ -54,12 +59,15 @@ def detect_signals(transcript: str, segments: List[Dict]) -> Dict:
             hedge_count += text_lower.count(h)
 
     else:
+        # Regex fallback
         filler_count += sum(text_lower.count(f) for f in FILLERS_SIMPLE)
         filler_count += sum(text_lower.count(f) for f in MULTI_FILLERS)
         hedge_count += sum(text_lower.count(h) for h in HEDGE_PHRASES)
 
+    # Apologies
     apology_count = sum(text_lower.count(a) for a in APOLOGIES)
 
+    # Pause & Energy Analysis
     long_pauses = 0
     long_speech_blocks = 0
 
@@ -75,12 +83,8 @@ def detect_signals(transcript: str, segments: List[Dict]) -> Dict:
         if (seg["end"] - seg["start"]) > 10.0:
             long_speech_blocks += 1
 
-    uncertainty_patterns = [
-        "or maybe",
-        "not sure if",
-        "i think it was",
-        "can't remember"
-    ]
+    # Semantic uncertainty
+    uncertainty_patterns = ["or maybe", "not sure if", "i think it was", "can't remember"]
     hedge_count += sum(text_lower.count(p) for p in uncertainty_patterns)
 
     return {
