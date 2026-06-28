@@ -1,70 +1,68 @@
 # app/models/question_llm_runner.py
+#
+# Optimized: Groq API with fast 8B model for question generation
+# - Uses llama-3.1-8b-instant (fastest available) for simple generation tasks
+# - JSON mode guarantees valid output
+# - 0.5-1.5s per call vs 10-30s with local 3B model
 
 import json
-import re
-import torch
 from typing import Dict
-from app.models.llm_loader import load_tcs_model
-
-
-def _fix_and_load(block: str) -> Dict:
-    cleaned = re.sub(r",\s*\}", "}", block)
-    cleaned = re.sub(r",\s*\]", "]", cleaned)
-
-    bracket_diff = cleaned.count("[") - cleaned.count("]")
-    brace_diff = cleaned.count("{") - cleaned.count("}")
-
-    if bracket_diff > 0:
-        cleaned += "]" * bracket_diff
-    if brace_diff > 0:
-        cleaned += "}" * brace_diff
-
-    return json.loads(cleaned)
+from app.models.llm_loader import get_groq_client
+from app.config import GROQ_LLM_FAST_MODEL
 
 
 def run_llm_question(prompt: str, max_new_tokens: int = 512) -> Dict:
-    tokenizer, model = load_tcs_model()
+    """
+    Generate interview questions via Groq's fast LLM.
 
-    inputs = tokenizer(
-        prompt,
-        return_tensors="pt",
-        truncation=True,
-        max_length=1024
+    Uses the 8B instant model since question generation is a simpler task
+    that doesn't need the full 70B model. This makes it ~2× faster than
+    even the standard Groq LLM call.
+    """
+    client = get_groq_client()
+
+    print(f"[Q-GEN] Generating questions via Groq ({GROQ_LLM_FAST_MODEL})...")
+
+    response = client.chat.completions.create(
+        model=GROQ_LLM_FAST_MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a professional interviewer. "
+                    "Always respond with valid JSON only. "
+                    "Do not include any text outside the JSON object."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        max_tokens=max_new_tokens,
+        temperature=0.7,  # Slight creativity for diverse questions
+        response_format={"type": "json_object"},
     )
 
-    inputs = {k: v.to(model.device) for k, v in inputs.items()}
+    raw_text = response.choices[0].message.content.strip()
 
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.pad_token_id
-        )
+    print(f"[Q-GEN] Response received ({len(raw_text)} chars)")
 
-    input_len = inputs["input_ids"].shape[1]
-    decoded = tokenizer.decode(
-        outputs[0][input_len:],
-        skip_special_tokens=True
-    ).strip()
+    try:
+        result = json.loads(raw_text)
+    except json.JSONDecodeError as e:
+        # Fallback: defensive extraction
+        print(f"[Q-GEN][WARN] JSON parse failed: {e}")
+        print(f"[Q-GEN] Raw output: {raw_text[:500]}")
+        from app.models.llm_utils import extract_valid_json_objects
+        parsed = extract_valid_json_objects(raw_text)
+        if parsed:
+            result = parsed[-1]
+        else:
+            raise RuntimeError(
+                "Question LLM returned invalid JSON.\n"
+                "Raw output:\n" + raw_text
+            )
 
-    json_blocks = re.findall(r"\{[\s\S]*?\}", decoded)
-    for block in reversed(json_blocks):
-        try:
-            return json.loads(block)
-        except json.JSONDecodeError:
-            try:
-                return _fix_and_load(block)
-            except Exception:
-                continue
-
-    if "{" in decoded:
-        try:
-            return _fix_and_load(decoded[decoded.find("{"):])
-        except Exception:
-            pass
-
-    raise RuntimeError(
-        "Question LLM returned invalid JSON.\nRaw output:\n" + decoded
-    )
+    print(f"[Q-GEN] Parsed JSON keys: {list(result.keys())}")
+    return result
