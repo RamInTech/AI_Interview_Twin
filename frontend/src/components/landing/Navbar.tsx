@@ -24,6 +24,9 @@ export default function Navbar() {
 
           <div className="flex items-center gap-4">
             {user ? <>
+                <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')} className="font-semibold text-muted-foreground">
+                  Dashboard
+                </Button>
                 <span className="text-sm text-muted-foreground hidden sm:block">
                   {user.email}
                 </span>
