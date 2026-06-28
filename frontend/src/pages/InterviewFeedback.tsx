@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Navbar from "@/components/landing/Navbar";
 import PageTransition from "@/components/PageTransition";
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/integrations/firebase/client';
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,21 +27,57 @@ import {
   TrendingUp,
   Crosshair,
   GraduationCap,
+  Loader2,
 } from "lucide-react";
 
 export default function InterviewFeedback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("interviewResults");
-    if (!stored) {
-      navigate("/");
-      return;
+    async function fetchReport() {
+      const docId = searchParams.get('id');
+      if (docId) {
+        try {
+          const docSnap = await getDoc(doc(db, 'interviews', docId));
+          if (docSnap.exists()) {
+            setData(docSnap.data().data);
+          } else {
+            console.error("No such document!");
+            alert("Report not found");
+            navigate('/');
+          }
+        } catch(err) {
+          console.error("Error fetching report", err);
+          navigate('/');
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        const stored = sessionStorage.getItem("interviewResults");
+        if (!stored) {
+          navigate("/");
+          return;
+        }
+        setData(JSON.parse(stored));
+        setLoading(false);
+      }
     }
-    setData(JSON.parse(stored));
-  }, [navigate]);
+    fetchReport();
+  }, [navigate, searchParams]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center p-8 bg-card/50 backdrop-blur rounded-2xl border border-primary/20 shadow-xl">
+          <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+          <p className="text-muted-foreground font-medium animate-pulse">Loading Interview Report...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!data) return null;
 
@@ -172,7 +210,15 @@ export default function InterviewFeedback() {
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Target className="h-4 w-4" /> Placement Readiness
                   </div>
-                  <div className="text-lg font-medium text-green-600">Strong Potential</div>
+                  <div className={`text-lg font-medium ${
+                    data.final_score >= 80 ? 'text-green-600' :
+                    data.final_score >= 60 ? 'text-yellow-600' :
+                    'text-red-500'
+                  }`}>
+                    {data.final_score >= 80 ? 'Strong Potential' :
+                     data.final_score >= 60 ? 'Needs Improvement' :
+                     'Requires Significant Work'}
+                  </div>
                 </CardContent>
               </Card>
             </section>
@@ -250,27 +296,65 @@ export default function InterviewFeedback() {
                 </div>
 
                 <ul className="space-y-2 text-sm">
-                  <li className="flex gap-2">
-                    <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5" /> Pace is fast (≈
-                    {data.cs_metrics?.wpm ?? "—"} WPM). Slow down slightly.
-                  </li>
-                  <li className="flex gap-2">
-                    <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5" /> Break long explanations with pauses.
-                  </li>
-                  <li className="flex gap-2">
-                    <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5" /> Tone sounds slightly uncertain.
-                  </li>
+                  {(data.cs_feedback && data.cs_feedback.length > 0) ? (
+                    data.cs_feedback.map((item: string, idx: number) => (
+                      <li key={idx} className="flex gap-2">
+                        <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5 shrink-0" />
+                        {item}
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-muted-foreground">No communication feedback available.</li>
+                  )}
                 </ul>
 
                 <Collapsible>
-                  <CollapsibleTrigger className="flex items-center gap-2 text-primary text-sm">
+                  <CollapsibleTrigger className="flex items-center gap-2 text-primary font-medium text-sm hover:underline transition-all">
                     View Detailed Metrics <ChevronDown className="h-4 w-4" />
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-4 text-sm text-muted-foreground space-y-1">
-                    <p>Words per minute: {data.cs_metrics?.wpm ?? "—"}</p>
-                    <p>Filler count: {data.cs_metrics?.filler_count ?? "—"}</p>
-                    <p>Hedge words: {data.cs_metrics?.hedge_count ?? "—"}</p>
-                    <p>Monotone score: {data.cs_metrics?.monotone_score ?? "—"}</p>
+                  <CollapsibleContent className="mt-5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-5 gap-x-6 bg-primary/5 rounded-xl p-5 border border-primary/10">
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Words / Min</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.wpm ? data.cs_metrics.wpm.toFixed(1) : "—"}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Fillers / Min</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.fillers_per_min ? data.cs_metrics.fillers_per_min.toFixed(2) : "0.00"}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Monotone Score</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.monotone_score ?? "—"}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Filler Words</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.filler_count ?? "0"}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Hedge Words</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.hedge_count ?? "0"}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Passive Language</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.passive_count ?? "0"}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Apologies</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.apology_count ?? "0"}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Long Pauses</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.long_pauses ?? "0"}</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Speech Blocks</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.long_speech_blocks ?? "0"}</p>
+                      </div>
+                      <div className="space-y-1.5 pt-2 sm:pt-0">
+                        <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-wider">Ownership Words</p>
+                        <p className="font-semibold text-foreground text-lg">{data.cs_metrics?.own_count ?? "0"}</p>
+                      </div>
+                    </div>
                   </CollapsibleContent>
                 </Collapsible>
               </CardContent>
@@ -347,13 +431,28 @@ export default function InterviewFeedback() {
             <Card className="border-green-500/60 bg-gradient-to-br from-green-100 via-white to-green-50 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-green-700">
-                  <CheckCircle2 className="h-5 w-5" /> Placement-Ready Answer
+                  <CheckCircle2 className="h-5 w-5" /> Actionable Next Steps
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="leading-relaxed text-sm">
-                  {data.placement_feedback?.revised_answer ?? "No suggested answer available."}
-                </p>
+                {data.placement_feedback?.revised_answer ? (
+                  <p className="leading-relaxed text-sm">
+                    {data.placement_feedback.revised_answer}
+                  </p>
+                ) : (
+                  <ul className="space-y-2 text-sm">
+                    {(data.placement_feedback?.placement_coaching?.actionable_improvements ?? []).length > 0 ? (
+                      data.placement_feedback.placement_coaching.actionable_improvements.map((item: string, idx: number) => (
+                        <li key={idx} className="flex gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                          {item}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-muted-foreground list-none">No actionable steps available.</li>
+                    )}
+                  </ul>
+                )}
               </CardContent>
             </Card>
 
