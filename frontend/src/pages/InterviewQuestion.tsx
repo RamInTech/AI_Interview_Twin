@@ -7,6 +7,9 @@ import { Mic, Square, ArrowLeft, Upload, ArrowRight, ArrowLeft as ArrowLeftIcon 
 import Navbar from '@/components/landing/Navbar';
 import PageTransition from '@/components/PageTransition';
 import CodeEditor from '@/components/interview/CodeEditor';
+import { useAuth } from '@/hooks/useAuth';
+import { db } from '@/integrations/firebase/client';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 
 /* ---------------- MOCK QUESTIONS ---------------- */
 
@@ -36,11 +39,13 @@ const mockQuestions = {
 export default function InterviewQuestion() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
   const rounds = searchParams.get('rounds')?.split(',') || [];
   const initialLanguage = searchParams.get('language') || 'python';
+  const role = searchParams.get('role') || 'Candidate';
 
   /* ---------------- QUESTION ---------------- */
 
@@ -56,8 +61,8 @@ export default function InterviewQuestion() {
   if (!questions.length) {
     const type =
       rounds.includes('dsa') ? 'dsa' :
-      rounds.includes('coding') ? 'coding' :
-      rounds.includes('technical') ? 'technical' : 'hr';
+        rounds.includes('coding') ? 'coding' :
+          rounds.includes('technical') ? 'technical' : 'hr';
 
     questions = mockQuestions[type];
   }
@@ -85,6 +90,7 @@ export default function InterviewQuestion() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   /* ---------------- START RECORDING ---------------- */
 
@@ -93,10 +99,14 @@ export default function InterviewQuestion() {
     setPendingAudioBlob(null);
     setAudioUrl(null);
     setPendingQuestion(null);
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
 
     audioChunksRef.current = [];
-    const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
     mediaRecorderRef.current = recorder;
 
     recorder.ondataavailable = (e) => {
@@ -104,11 +114,14 @@ export default function InterviewQuestion() {
     };
 
     recorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'video/webm' });
       setAudioUrl(URL.createObjectURL(audioBlob));
       setPendingAudioBlob(audioBlob);
       setPendingQuestion(question);
       stream.getTracks().forEach((t) => t.stop());
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
     };
 
     recorder.start();
@@ -144,7 +157,7 @@ export default function InterviewQuestion() {
 
   /* ---------------- BACKEND CALL ---------------- */
 
-  const sendAudioToBackend = async (audioBlob: Blob, questionText: string) => {
+  const sendAudioToBackend = async (audioBlob: Blob, questionsList: string[]) => {
     try {
       setIsEvaluating(true);
       setEvaluationError(null);
@@ -152,9 +165,9 @@ export default function InterviewQuestion() {
       const audioFile =
         audioBlob instanceof File
           ? audioBlob
-          : new File([audioBlob], 'answer.webm', { type: 'audio/webm' });
+          : new File([audioBlob], 'answer.webm', { type: 'video/webm' });
       formData.append('audio', audioFile, audioFile.name);
-      formData.append('questions', JSON.stringify([questionText]));
+      formData.append('questions', JSON.stringify(questionsList));
 
       const res = await fetch(`${API_BASE_URL}/api/interview/evaluate`, {
         method: 'POST',
@@ -168,6 +181,44 @@ export default function InterviewQuestion() {
       // Persist results so feedback page can load them
       sessionStorage.setItem('interviewResults', JSON.stringify(result));
 
+      // Attempt to store progress + report for authenticated users
+      let docId: string | null = null;
+      if (user) {
+        try {
+          const rounds = searchParams.get('rounds')?.split(',') || [];
+          const role = searchParams.get('role') || 'Candidate';
+          const experience = searchParams.get('experience') || '';
+          const language = searchParams.get('language') || '';
+          const difficulty = searchParams.get('difficulty') || '';
+          const communicationMode = searchParams.get('communicationMode') || '';
+
+          const payload = {
+            userId: user.uid,
+            role,
+            experience,
+            rounds,
+            language,
+            difficulty,
+            communicationMode,
+            questions: questionsList,
+            transcript: result.transcript ?? '',
+            data: result,
+            timestamp: serverTimestamp(),
+          };
+
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Firestore operation timed out')), 4000)
+          );
+          const docRef = await Promise.race([
+            addDoc(collection(db, 'interviews'), payload),
+            timeoutPromise
+          ]) as any;
+          docId = docRef.id;
+        } catch (dbErr) {
+          console.error('Failed to save interview report to Firebase:', dbErr);
+        }
+      }
+
       // Clear pending data once processing completes successfully
       setPendingAudioBlob(null);
       setPendingQuestion(null);
@@ -175,6 +226,7 @@ export default function InterviewQuestion() {
 
       // Preserve existing query params (role, rounds, etc.) when moving to feedback
       const params = new URLSearchParams(searchParams);
+      if (docId) params.set('id', docId);
       navigate(`/interview/feedback?${params.toString()}`);
 
     } catch (err) {
@@ -190,8 +242,7 @@ export default function InterviewQuestion() {
       setEvaluationError('Record or upload audio before evaluating.');
       return;
     }
-    const questionForEvaluation = pendingQuestion || question;
-    await sendAudioToBackend(pendingAudioBlob, questionForEvaluation);
+    await sendAudioToBackend(pendingAudioBlob, questions);
   };
 
   /* ---------------- CODE SUBMIT ---------------- */
@@ -268,9 +319,14 @@ export default function InterviewQuestion() {
           </Button>
 
           <div className="text-center my-8">
-            <span className="px-4 py-1.5 rounded-full bg-secondary/70 text-xs font-semibold tracking-wide uppercase text-foreground/80">
-              {getRoundLabel()}
-            </span>
+            <div className="flex items-center justify-center gap-2">
+              <span className="px-4 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold tracking-wide uppercase">
+                {role}
+              </span>
+              <span className="px-4 py-1.5 rounded-full bg-secondary/70 text-xs font-semibold tracking-wide uppercase text-foreground/80">
+                {getRoundLabel()}
+              </span>
+            </div>
             <h1 className="text-3xl font-bold mt-4 text-foreground">
               {isRecording ? 'Recording...' : 'Interview Question'}
             </h1>
@@ -361,20 +417,37 @@ export default function InterviewQuestion() {
             )}
 
             <div className="pt-4">
-              <label className="inline-flex items-center gap-2 cursor-pointer">
+              <label className="inline-flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground transition-colors">
                 <Upload className="h-5 w-5" />
-                <span className="font-medium">Upload audio file</span>
+                <span className="font-medium">Upload audio/video file</span>
                 <input
                   type="file"
-                  accept="audio/*"
+                  accept="audio/*,video/*"
                   hidden
                   onChange={handleAudioUpload}
                 />
               </label>
             </div>
 
-            {audioUrl && (
-              <audio controls className="w-full mt-4 rounded-2xl border border-border/40" src={audioUrl} />
+            {/* Live Camera Preview */}
+            <div className={`mt-6 mx-auto overflow-hidden rounded-2xl border border-primary/20 bg-black/5 shadow-inner transition-all duration-500 ease-in-out ${isRecording ? 'opacity-100 max-h-[400px]' : 'opacity-0 max-h-0'}`} style={{ maxWidth: '480px' }}>
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                muted 
+                playsInline 
+                className="w-full h-auto object-cover transform -scale-x-100"
+              />
+            </div>
+
+            {/* Playback Preview */}
+            {audioUrl && !isRecording && (
+              <video 
+                controls 
+                className="w-full max-w-lg mx-auto mt-6 rounded-2xl border border-primary/20 shadow-xl shadow-primary/5 bg-black/5" 
+                src={audioUrl} 
+                playsInline
+              />
             )}
 
             <div className="pt-4 space-y-3">
@@ -390,7 +463,7 @@ export default function InterviewQuestion() {
               )}
               {!hasPendingAudio && (
                 <p className="text-sm text-muted-foreground">
-                  Record or upload audio before evaluating.
+                  Record or upload a response before evaluating.
                 </p>
               )}
             </div>

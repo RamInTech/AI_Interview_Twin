@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -16,6 +17,9 @@ import {
   Brain,
   MessageSquare,
   Terminal,
+  Layers,
+  Sparkles,
+  Cpu,
 } from 'lucide-react';
 import Navbar from '@/components/landing/Navbar';
 import PageTransition from '@/components/PageTransition';
@@ -29,6 +33,11 @@ const roles = [
   { id: 'Data Analyst', label: 'Data Analyst' },
   { id: 'Machine Learning Engineer', label: 'Machine Learning Engineer' },
   { id: 'Communication', label: 'Communication Skills Interview' },
+  { id: 'GenAI Engineer', label: 'Generative AI Engineer' },
+  { id: 'Prompt Engineer', label: 'Prompt Engineer' },
+  { id: 'Cloud Architect', label: 'Cloud / Solutions Architect' },
+  { id: 'DevOps Engineer', label: 'DevOps / SRE' },
+  { id: 'Product Manager', label: 'Product Manager' },
 ];
 
 const experienceLevels = [
@@ -72,6 +81,27 @@ const interviewRounds = [
     description: 'Demonstrate your verbal and written communication skills effectively.',
     icon: MessageSquare,
     evaluates: ['Clarity of thought', 'Articulation', 'Active listening', 'Professional tone'],
+  },
+  {
+    id: 'SystemDesign',
+    title: 'System Design',
+    description: 'Architect scalable products and defend trade-offs in real time.',
+    icon: Layers,
+    evaluates: ['Component reasoning', 'Scaling strategy', 'Trade-off clarity', 'Diagram narration'],
+  },
+  {
+    id: 'GenAI',
+    title: 'GenAI Deep Dive',
+    description: 'Discuss prompting strategies, safety guardrails, and evaluation metrics.',
+    icon: Sparkles,
+    evaluates: ['Prompt strategy', 'Safety awareness', 'Evaluation rigor', 'Tooling knowledge'],
+  },
+  {
+    id: 'Performance',
+    title: 'Performance Debugging',
+    description: 'Identify latency bottlenecks and narrate your investigation plan.',
+    icon: Cpu,
+    evaluates: ['Bottleneck detection', 'Metrics literacy', 'Instrumentation plan', 'Optimization roadmap'],
   },
 ];
 
@@ -136,6 +166,7 @@ const fieldVariants = {
     transition: { duration: 0.2, ease: 'easeIn' as const },
   },
 };
+
 
 export default function InterviewSelect() {
   const navigate = useNavigate();
@@ -249,6 +280,10 @@ export default function InterviewSelect() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.1 }}
             >
+              <Badge className="inline-flex items-center gap-2 mb-4 bg-primary/10 text-primary border-primary/30">
+                <Sparkles className="h-3.5 w-3.5" />
+                Intelligent practice studio
+              </Badge>
               <h1 className="text-4xl font-bold mb-4">Configure Your Interview</h1>
               <p className="text-lg text-muted-foreground">
                 Customize your mock interview experience
