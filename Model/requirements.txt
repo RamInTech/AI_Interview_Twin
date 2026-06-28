@@ -1,0 +1,39 @@
+# ============================================
+# AI Interview Twin — Dependencies (Optimized)
+# ============================================
+#
+# Key changes from original:
+# - Added: groq (Whisper STT + LLM inference via API)
+# - Added: vaderSentiment (lightweight sentiment, replaces DistilBERT)
+# - Kept: transformers (only for fallback, optional)
+# - Kept: torch (only for fallback, optional)
+# - Kept: faster-whisper (only for fallback, optional)
+#
+# Core API & Server
+fastapi
+uvicorn
+python-multipart
+python-dotenv
+
+# Groq API (PRIMARY — Whisper STT + LLM inference)
+groq
+
+# Audio Processing
+librosa
+numpy
+soundfile
+imageio-ffmpeg
+
+# NLP (Linguistic analysis — SpaCy is already fast & lightweight)
+spacy
+
+# Sentiment Analysis (lightweight, replaces DistilBERT)
+vaderSentiment
+
+# ============================================
+# OPTIONAL: Local Fallback (uncomment if needed)
+# Only required if running without internet access
+# ============================================
+# torch
+# transformers
+# faster-whisper
