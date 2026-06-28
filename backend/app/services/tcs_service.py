@@ -1,5 +1,6 @@
 # app/services/tcs_service.py
 
+import json
 from typing import List
 from app.prompts.tcs_prompt import build_tcs_prompt
 from app.schemas.tcs import TechnicalEvaluationResult
@@ -22,6 +23,7 @@ def run_tcs_llm(
     transcript: str,
     question: str | List[str] | None = None
 ) -> dict:
+    print("[TCS] Running technical correctness evaluation...")
 
     if question is None:
         question = "Explain your approach to this problem."
@@ -38,6 +40,9 @@ def compute_tcs(
 ) -> TechnicalEvaluationResult:
 
     raw = run_tcs_llm(transcript, question)
+
+    print("\n[TCS] Raw LLM output:")
+    print(json.dumps(raw, indent=2, default=str))
 
     if "score" not in raw:
         raise RuntimeError(f"TCS output missing 'score'. Raw response: {raw}")
@@ -56,10 +61,13 @@ def compute_tcs(
             "Improve clarity and specificity while explaining technical decisions."
         ]
 
-    return TechnicalEvaluationResult(
+    result = TechnicalEvaluationResult(
         score=score,
         band=band,
         verdict=verdict,
         issues=issues,
         improvement_points=improvements
     )
+
+    print(f"[TCS] Parsed => Score: {result.score}, Band: {result.band}")
+    return result
