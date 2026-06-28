@@ -1,8 +1,15 @@
-import librosa, numpy as np
-import subprocess, tempfile, os
+# app/audio/audio_utils.py
+
+import librosa
+import numpy as np
+import subprocess
+import tempfile
+import os
 import imageio_ffmpeg
 
-def load_audio_mono(path, sr=16000):
+
+def load_audio_mono(path: str, sr: int = 16000):
+    """Load audio as mono float32 at target sampling rate."""
     try:
         audio, orig_sr = librosa.load(path, sr=None, mono=True)
     except Exception:
@@ -19,14 +26,15 @@ def load_audio_mono(path, sr=16000):
             )
             if proc.returncode != 0:
                 raise RuntimeError(
-                    f"ffmpeg failed to decode audio (status {proc.returncode}): {proc.stderr.decode(errors='ignore') or 'no stderr'}"
+                    f"ffmpeg failed to decode audio (status {proc.returncode}): "
+                    f"{proc.stderr.decode(errors='ignore') or 'no stderr'}"
                 )
             audio, orig_sr = librosa.load(tmp_path, sr=sr, mono=True)
         except FileNotFoundError as e:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
             raise RuntimeError("ffmpeg not found; install ffmpeg to decode webm/opus audio") from e
-        except Exception as e:
+        except Exception:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
             raise

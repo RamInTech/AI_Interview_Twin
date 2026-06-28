@@ -3,7 +3,19 @@
 import numpy as np
 import librosa
 
+
 def analyze_pitch_dynamics(audio: np.ndarray, sr: int):
+    """
+    Analyze pitch variation to detect monotone delivery.
+
+    Returns:
+        {
+            'std_semitones': float,
+            'voiced_ratio': float,
+            'monotone_score': float,   # 0 (expressive) → 1 (very monotone)
+            'is_monotone': bool
+        }
+    """
     try:
         f0, voiced_flag, _ = librosa.pyin(
             audio,
@@ -44,7 +56,8 @@ def analyze_pitch_dynamics(audio: np.ndarray, sr: int):
             "is_monotone": std_semitones < MONOTONE_LIMIT
         }
 
-    except Exception:
+    except Exception as e:
+        print(f"[WARN] Pitch analysis failed: {e}")
         return {
             "std_semitones": 0.0,
             "voiced_ratio": 0.0,
