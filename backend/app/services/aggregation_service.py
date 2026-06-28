@@ -2,9 +2,12 @@
 
 from app.schemas.tcs import TechnicalEvaluationResult
 
+
 def combine_cs_tcs(cs_score: float, tcs: TechnicalEvaluationResult) -> float:
+    # Weighted fusion (technical slightly dominant)
     final_score = 0.6 * cs_score + 0.4 * tcs.score
 
+    # Interview realism constraints
     if tcs.band == "Poor":
         final_score = min(final_score, 45.0)
     elif tcs.band == "Weak":
@@ -12,6 +15,7 @@ def combine_cs_tcs(cs_score: float, tcs: TechnicalEvaluationResult) -> float:
     elif tcs.band == "Partial":
         final_score = min(final_score, 82.0)
 
+    # Absolute realism bounds
     final_score = min(final_score, max(cs_score, tcs.score))
     final_score = min(final_score, 95.0)
     final_score = max(final_score, 0.0)
