@@ -1,4 +1,7 @@
+# app/prompts/question_prompt.py
+
 from app.schemas.question import QuestionGenerationRequest
+
 
 def build_question_generation_prompt(req: QuestionGenerationRequest) -> str:
     return f"""

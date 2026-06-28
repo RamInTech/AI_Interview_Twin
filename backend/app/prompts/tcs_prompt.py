@@ -1,4 +1,7 @@
+# app/prompts/tcs_prompt.py
+
 from typing import List
+
 
 def build_tcs_prompt(question: str | List[str], transcript: str) -> str:
     # Normalize question in case a list/array is passed
@@ -15,9 +18,9 @@ You are a senior technical interviewer conducting a mock interview.
 
 You must evaluate the candidate STRICTLY based on:
 1. The interview question provided
-2. The candidate’s answer provided below
+2. The candidate's answer provided below
 
-You have NO access to the candidate’s resume, background, or intent beyond
+You have NO access to the candidate's resume, background, or intent beyond
 what is explicitly stated.
 
 Your responsibilities:
@@ -34,7 +37,7 @@ STRICT EVALUATION RULES:
 - Do NOT infer unstated knowledge or intentions.
 - Do NOT introduce new tools, technologies, metrics, or concepts.
 - Do NOT penalize for advanced topics unless the question explicitly requires them.
-- Avoid generic interview advice (e.g., “practice more”, “be confident”).
+- Avoid generic interview advice (e.g., \u201cpractice more\u201d, \u201cbe confident\u201d).
 
 Interview Question:
 {question}
@@ -65,13 +68,12 @@ OUTPUT RULES:
 - Do NOT include markdown, explanations, or extra text.
 
 JSON format:
-{{
-  "score": <int>,
-  "band": "<Excellent|Good|Partial|Weak|Poor>",
-  "verdict": "<1–2 sentence technical summary judging alignment with the question>",
-  "issues": ["<question-relative technical issues or 'No major technical issues identified'>"],
-  "improvement_points": ["<specific, question-grounded coaching points>"]
-}}
+The output must be a single flat JSON object containing exactly these 5 keys:
+1. "score" (integer between 0 and 100)
+2. "band" (string, must be one of: Excellent, Good, Partial, Weak, Poor)
+3. "verdict" (string, a 1-2 sentence technical summary)
+4. "issues" (array of strings, detailing question-relative technical issues or 'No major technical issues identified')
+5. "improvement_points" (array of strings, specific coaching points)
 
 Return only valid JSON.
 """

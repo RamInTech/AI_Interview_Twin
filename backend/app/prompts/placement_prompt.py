@@ -2,7 +2,16 @@
 
 from typing import List
 
-def build_placement_coaching_prompt(question, transcript) -> str:
+
+def build_placement_coaching_prompt(question: str | List[str], transcript: str) -> str:
+    if isinstance(question, list):
+        question = next(
+            (str(q).strip() for q in question if str(q).strip()),
+            "Explain your approach to this problem."
+        )
+    else:
+        question = str(question).strip() or "Explain your approach to this problem."
+
     return f"""
 You are a senior placement officer reviewing a mock interview response.
 
@@ -10,7 +19,7 @@ You must evaluate the candidate STRICTLY based on:
 - The interview transcript provided below
 - Evidence explicitly present in the transcript
 
-You have NO access to the candidate’s resume, background, or intent beyond
+You have NO access to the candidate's resume, background, or intent beyond
 what is stated in the transcript.
 
 YOUR RESPONSIBILITIES:
@@ -22,53 +31,57 @@ EVALUATION RULES:
 - Base every point directly on the transcript.
 - Do NOT invent skills, experience, or achievements.
 - Do NOT add tools, technologies, or concepts not mentioned.
-- Avoid generic advice (e.g., “practice more”, “be confident”).
+- Avoid generic advice (e.g., \u201cpractice more\u201d, \u201cbe confident\u201d).
 - If evidence is limited, infer conservatively from what is missing.
 
 MANDATORY OUTPUT REQUIREMENTS:
-- standout_strengths: 3–4 items
-- top_improvements: 3–4 items
-- placement_coaching.current_gaps: ≥2 items
-- placement_coaching.actionable_improvements: ≥2 items
-- placement_coaching.placement_focus: ≥2 items
+- "standout_strengths" MUST contain **3 to 4 distinct items**
+- "top_improvements" MUST contain **3 to 4 distinct items**
+- "current_gaps" MUST contain **at least 2 items**
+- "actionable_improvements" MUST contain **at least 2 items**
+- "placement_focus" MUST contain **at least 2 items**
+- Each item must be concise and transcript-grounded
 
 OUTPUT CONSTRAINTS:
-- Output STRICT JSON only
-- Start with {{ and end with }}
-- All values MUST be arrays of strings
-- No placeholders, no generic filler, no markdown
+- Return EXACTLY ONE JSON object.
+- Start the response with '{{' and end with '}}'.
+- Output STRICT JSON only (no text, no markdown).
+- All values MUST be arrays of strings.
+- Keep each point short and specific (no long paragraphs).
 
 Interview Transcript:
 {transcript}
 
-JSON FORMAT (FOLLOW EXACTLY):
+JSON format (FOLLOW EXACTLY):
 
 {{
   "standout_strengths": [
-    "Clear articulation of personal background",
-    "Demonstrates early interest in technology",
-    "Shows willingness to learn and grow"
+    "<strength 1>",
+    "<strength 2>",
+    "<strength 3>",
+    "<optional strength 4>"
   ],
   "top_improvements": [
-    "Answers lack structure and focus",
-    "Response is longer than required",
-    "Key points are repeated unnecessarily"
+    "<improvement 1>",
+    "<improvement 2>",
+    "<improvement 3>",
+    "<optional improvement 4>"
   ],
   "placement_coaching": {{
     "current_gaps": [
-      "Did not directly answer the interview question",
-      "Missing concise summary of academic background"
+      "<gap 1>",
+      "<gap 2>"
     ],
     "actionable_improvements": [
-      "Structure answers using introduction–body–conclusion format",
-      "Focus on answering the question before adding details"
+      "<actionable advice 1>",
+      "<actionable advice 2>"
     ],
     "placement_focus": [
-      "Answer relevance",
-      "Concise communication"
+      "<focus area 1>",
+      "<focus area 2>"
     ]
   }}
 }}
 
 Return only valid JSON.
-""".strip()
+"""
