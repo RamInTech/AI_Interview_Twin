@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import Index from '@/pages/Index';
+import Dashboard from '@/pages/Dashboard';
 import Auth from '@/pages/Auth';
 import InterviewSelect from '@/pages/InterviewSelect';
 import InterviewSetup from '@/pages/InterviewSetup';
@@ -16,6 +17,7 @@ export default function AnimatedRoutes() {
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Index />} />
+        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/interview/select" element={<InterviewSelect />} />
         <Route path="/interview/setup" element={<InterviewSetup />} />
