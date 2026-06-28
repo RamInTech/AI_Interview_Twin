@@ -1,3 +1,5 @@
+# app/api/interview.py
+
 import json
 import os
 import tempfile
@@ -12,11 +14,13 @@ from app.schemas.question import QuestionGenerationRequest
 
 router = APIRouter(prefix="/api/interview")
 
+
 class GenerateQuestionsRequest(BaseModel):
     role: str
     experience: str
     company_type: str
     interview_round: str
+
 
 @router.post("/generate-questions")
 async def generate_questions_endpoint(request: GenerateQuestionsRequest):
@@ -28,6 +32,7 @@ async def generate_questions_endpoint(request: GenerateQuestionsRequest):
     )
     questions = generate_interview_questions(req)
     return {"questions": questions}
+
 
 @router.post("/evaluate")
 async def evaluate(audio: UploadFile = File(...), questions: str = Form(...)):

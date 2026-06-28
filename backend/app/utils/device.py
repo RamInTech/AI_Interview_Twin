@@ -1,3 +1,5 @@
+# app/utils/device.py
+
 def detect_device():
     try:
         import torch
