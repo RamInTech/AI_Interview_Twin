@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from dataclasses import dataclass
 
-class QuestionGenerationRequest(BaseModel):
+@dataclass
+class QuestionGenerationRequest:
     role: str
     experience: str
     company_type: str
