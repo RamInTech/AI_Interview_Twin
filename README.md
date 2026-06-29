@@ -125,14 +125,15 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 # install dependencies
 pip install -r requirements.txt
 
-# the pipeline also uses these runtime packages:
-pip install groq python-multipart python-dotenv vaderSentiment
-
 # download the spaCy English model
 python -m spacy download en_core_web_sm
 ```
 
-Create `backend/.env`:
+Configure environment variables — copy the template and fill in your Groq key:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
@@ -155,7 +156,11 @@ cd frontend
 npm install          # or: bun install
 ```
 
-Create `frontend/.env`:
+Configure environment variables — copy the template and fill in your values:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000

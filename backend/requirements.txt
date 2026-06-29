@@ -1,10 +1,32 @@
+# ============================================
+# AI Interview Twin — Backend Dependencies
+# ============================================
+
+# Core API & Server
 fastapi
 uvicorn
-torch
-transformers
+python-multipart        # required for multipart/form-data (audio upload)
+python-dotenv           # loads backend/.env
+
+# Groq API (PRIMARY — Whisper STT + LLM inference)
+groq
+
+# Audio Processing
 librosa
 numpy
-faster-whisper
-spacy
 soundfile
 imageio-ffmpeg
+
+# NLP (linguistic signal analysis)
+spacy
+# after install, run: python -m spacy download en_core_web_sm
+
+# Sentiment Analysis (lightweight, replaces DistilBERT)
+vaderSentiment
+
+# ============================================
+# OPTIONAL: Local fallback (uncomment if running without internet/Groq)
+# ============================================
+# torch
+# transformers
+# faster-whisper
