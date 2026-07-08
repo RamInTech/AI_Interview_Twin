@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Mic, Square, ArrowLeft, Upload, ArrowRight, ArrowLeft as ArrowLeftIcon } from 'lucide-react';
+import { Mic, Square, ArrowLeft, Upload, ArrowRight, ArrowLeft as ArrowLeftIcon, Sparkles, Loader2 } from 'lucide-react';
 import Navbar from '@/components/landing/Navbar';
 import PageTransition from '@/components/PageTransition';
 import CodeEditor from '@/components/interview/CodeEditor';
+import { interviewApi, CodeSubmission, ResumeProfile } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/integrations/firebase/client';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
@@ -43,29 +44,51 @@ export default function InterviewQuestion() {
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
-  const rounds = searchParams.get('rounds')?.split(',') || [];
-  const initialLanguage = searchParams.get('language') || 'python';
+  // Round ids arrive capitalized from InterviewSelect ('DSA', 'Coding')
+  // and lowercase from the legacy setup flow — normalize once
+  const rounds = (searchParams.get('rounds')?.split(',') || []).map((r) =>
+    r.trim().toLowerCase()
+  );
+
+  // Map display language ids ('C++', 'Java', ...) to editor ids
+  const languageIdMap: Record<string, string> = {
+    'c++': 'cpp',
+    cpp: 'cpp',
+    java: 'java',
+    python: 'python',
+    javascript: 'javascript',
+    go: 'go',
+    rust: 'rust',
+  };
+  const initialLanguage =
+    languageIdMap[(searchParams.get('language') || 'python').toLowerCase()] || 'python';
+  const difficulty = searchParams.get('difficulty') || 'Medium';
   const role = searchParams.get('role') || 'Candidate';
 
   /* ---------------- QUESTION ---------------- */
 
   const questionsParam = searchParams.get('questions');
-  let questions: string[] = [];
 
-  try {
-    questions = questionsParam ? JSON.parse(questionsParam) : [];
-  } catch {
-    questions = [];
-  }
+  // Questions are state (not just URL-derived) so dynamically generated
+  // follow-up questions can be inserted during the interview
+  const [questions, setQuestions] = useState<string[]>(() => {
+    let initial: string[] = [];
+    try {
+      initial = questionsParam ? JSON.parse(questionsParam) : [];
+    } catch {
+      initial = [];
+    }
 
-  if (!questions.length) {
-    const type =
-      rounds.includes('dsa') ? 'dsa' :
-        rounds.includes('coding') ? 'coding' :
-          rounds.includes('technical') ? 'technical' : 'hr';
+    if (!initial.length) {
+      const type =
+        rounds.includes('dsa') ? 'dsa' :
+          rounds.includes('coding') ? 'coding' :
+            rounds.includes('technical') ? 'technical' : 'hr';
 
-    questions = mockQuestions[type];
-  }
+      initial = mockQuestions[type];
+    }
+    return initial;
+  });
 
   const [questionIndex, setQuestionIndex] = useState(0);
   const question = questions[questionIndex] || '';
@@ -85,7 +108,17 @@ export default function InterviewQuestion() {
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluationError, setEvaluationError] = useState<string | null>(null);
+  const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
+  const [codeSubmissions, setCodeSubmissions] = useState<CodeSubmission[]>([]);
   const hasPendingAudio = Boolean(pendingAudioBlob);
+
+  const getResumeProfile = (): ResumeProfile | null => {
+    try {
+      return JSON.parse(sessionStorage.getItem('resumeProfile') || 'null');
+    } catch {
+      return null;
+    }
+  };
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -168,6 +201,9 @@ export default function InterviewQuestion() {
           : new File([audioBlob], 'answer.webm', { type: 'video/webm' });
       formData.append('audio', audioFile, audioFile.name);
       formData.append('questions', JSON.stringify(questionsList));
+      if (codeSubmissions.length > 0) {
+        formData.append('code_submissions', JSON.stringify(codeSubmissions));
+      }
 
       const res = await fetch(`${API_BASE_URL}/api/interview/evaluate`, {
         method: 'POST',
@@ -247,10 +283,41 @@ export default function InterviewQuestion() {
 
   /* ---------------- CODE SUBMIT ---------------- */
 
-  const handleCodeSubmit = (code: string, language: string) => {
-    navigate('/interview/processing', {
-      state: { code, language, question },
-    });
+  // Judged submissions from the IDE are kept in the session and sent
+  // with the final evaluation so coding counts toward the overall score
+  const handleSubmissionRecorded = (submission: CodeSubmission) => {
+    setCodeSubmissions((prev) => [...prev, submission]);
+  };
+
+  /* ---------------- FOLLOW-UP QUESTION ---------------- */
+
+  const handleFollowUp = async () => {
+    if (!pendingAudioBlob || isGeneratingFollowUp) return;
+
+    try {
+      setIsGeneratingFollowUp(true);
+      setEvaluationError(null);
+
+      const { question: followUp } = await interviewApi.generateFollowUp({
+        question: pendingQuestion || question,
+        askedQuestions: questions,
+        resumeProfile: getResumeProfile(),
+        audio: pendingAudioBlob,
+      });
+
+      // Insert the follow-up right after the current question and move to it
+      setQuestions((prev) => [
+        ...prev.slice(0, questionIndex + 1),
+        followUp,
+        ...prev.slice(questionIndex + 1),
+      ]);
+      setQuestionIndex((idx) => idx + 1);
+    } catch (err) {
+      console.error('Follow-up generation failed:', err);
+      setEvaluationError('Failed to generate a follow-up question. Please try again.');
+    } finally {
+      setIsGeneratingFollowUp(false);
+    }
   };
 
   /* ---------------- QUESTION NAV ---------------- */
@@ -375,21 +442,29 @@ export default function InterviewQuestion() {
             </div>
           </div>
 
-          <Card className="mb-8 border border-primary/20 shadow-xl shadow-primary/10 bg-gradient-to-br from-card/95 via-background/80 to-card/95">
-            <CardContent className="py-10 px-6 text-center text-xl relative">
-              <span className="absolute inset-x-10 top-4 text-xs tracking-[0.3em] uppercase text-primary/60">
-                Active Question
-              </span>
-              "{question}"
-            </CardContent>
-          </Card>
+          {/* Coding/DSA rounds show the full problem statement inside the
+              IDE below (LeetCode-style), so skip the plain question card */}
+          {!showCodeEditor && (
+            <Card className="mb-8 border border-primary/20 shadow-xl shadow-primary/10 bg-gradient-to-br from-card/95 via-background/80 to-card/95">
+              <CardContent className="py-10 px-6 text-center text-xl relative">
+                <span className="absolute inset-x-10 top-4 text-xs tracking-[0.3em] uppercase text-primary/60">
+                  Active Question
+                </span>
+                "{question}"
+              </CardContent>
+            </Card>
+          )}
 
           <AnimatePresence>
             {showCodeEditor && (
-              <CodeEditor
-                initialLanguage={initialLanguage}
-                onSubmit={handleCodeSubmit}
-              />
+              <div className="mb-8">
+                <CodeEditor
+                  initialLanguage={initialLanguage}
+                  question={question}
+                  difficulty={difficulty}
+                  onSubmissionRecorded={handleSubmissionRecorded}
+                />
+              </div>
             )}
           </AnimatePresence>
 
@@ -451,13 +526,40 @@ export default function InterviewQuestion() {
             )}
 
             <div className="pt-4 space-y-3">
-              <Button
-                onClick={handleEvaluateInterview}
-                disabled={!hasPendingAudio || isEvaluating}
-                className="w-full sm:w-auto bg-gradient-to-r from-primary via-sky-500 to-cyan-400 text-primary-foreground shadow-lg shadow-sky-500/30 hover:opacity-95"
-              >
-                {isEvaluating ? 'Evaluating...' : 'Evaluate Interview'}
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button
+                  variant="outline"
+                  onClick={handleFollowUp}
+                  disabled={!hasPendingAudio || isGeneratingFollowUp || isEvaluating}
+                  className="w-full sm:w-auto border-primary/30"
+                  title="Generate a contextual follow-up question based on your answer"
+                >
+                  {isGeneratingFollowUp ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Generating follow-up...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Ask Follow-up Question
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={handleEvaluateInterview}
+                  disabled={!hasPendingAudio || isEvaluating}
+                  className="w-full sm:w-auto bg-gradient-to-r from-primary via-sky-500 to-cyan-400 text-primary-foreground shadow-lg shadow-sky-500/30 hover:opacity-95"
+                >
+                  {isEvaluating ? 'Evaluating...' : 'Evaluate Interview'}
+                </Button>
+              </div>
+              {codeSubmissions.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {codeSubmissions.length} code submission
+                  {codeSubmissions.length > 1 ? 's' : ''} recorded — included in your evaluation.
+                </p>
+              )}
               {evaluationError && (
                 <p className="text-sm text-destructive">{evaluationError}</p>
               )}

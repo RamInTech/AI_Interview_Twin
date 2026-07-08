@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, Circle, Mic, Volume2, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { CheckCircle2, Circle, Mic, Volume2, ArrowLeft, ArrowRight, Loader2, FileUp, FileCheck2, X } from 'lucide-react';
 import Navbar from '@/components/landing/Navbar';
 import PageTransition from '@/components/PageTransition';
-import { interviewApi, ApiError } from '@/lib/api';
+import { interviewApi, ApiError, ResumeProfile } from '@/lib/api';
 
 const instructions = [
   { id: 1, text: 'Find a quiet place with minimal background noise', icon: Volume2 },
@@ -58,6 +58,13 @@ export default function InterviewSetup() {
   const [micPermission, setMicPermission] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [checkedItems, setCheckedItems] = useState<number[]>([]);
   const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
+
+  const [resumeProfile, setResumeProfile] = useState<ResumeProfile | null>(null);
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+  const [isParsingResume, setIsParsingResume] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  const resumeInputRef = useRef<HTMLInputElement | null>(null);
+
   const navigate = useNavigate();
 
   // Extract interview configuration from search params
@@ -91,6 +98,38 @@ export default function InterviewSetup() {
     setCheckedItems((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    try {
+      setIsParsingResume(true);
+      setResumeError(null);
+      const { resume_profile } = await interviewApi.parseResume(file);
+      setResumeProfile(resume_profile);
+      setResumeFileName(file.name);
+      // Persist for follow-up question generation during the interview
+      sessionStorage.setItem('resumeProfile', JSON.stringify(resume_profile));
+    } catch (error) {
+      console.error('Resume parsing failed:', error);
+      setResumeError(
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to parse resume. Please try a different file.'
+      );
+    } finally {
+      setIsParsingResume(false);
+    }
+  };
+
+  const clearResume = () => {
+    setResumeProfile(null);
+    setResumeFileName(null);
+    setResumeError(null);
+    sessionStorage.removeItem('resumeProfile');
   };
 
   const handleStart = async () => {
@@ -128,7 +167,8 @@ export default function InterviewSetup() {
         role: roleMap[role] || role,
         experience: experienceMap[experience] || experience,
         company_type: companyType,
-        interview_round: roundMap[interviewRound] || interviewRound
+        interview_round: roundMap[interviewRound] || interviewRound,
+        ...(resumeProfile ? { resume_profile: resumeProfile } : {})
       };
 
       console.log('Generating questions with request:', request);
@@ -273,6 +313,91 @@ export default function InterviewSetup() {
                       </motion.button>
                     ))}
                   </motion.div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              variants={cardVariants}
+              initial="hidden"
+              animate="visible"
+              transition={{ delay: 0.3 }}
+            >
+              <Card className="mb-8 overflow-hidden">
+                <CardHeader>
+                  <CardTitle className="text-lg">
+                    Personalize with Your Resume
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">(optional)</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {!resumeProfile ? (
+                    <div className="space-y-3">
+                      <button
+                        onClick={() => resumeInputRef.current?.click()}
+                        disabled={isParsingResume}
+                        className="w-full flex items-center justify-center gap-3 p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-secondary/30 transition-colors text-muted-foreground"
+                      >
+                        {isParsingResume ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            Analyzing your resume...
+                          </>
+                        ) : (
+                          <>
+                            <FileUp className="h-5 w-5" />
+                            Upload resume (PDF, DOCX or TXT) for questions tailored to
+                            your projects & skills
+                          </>
+                        )}
+                      </button>
+                      <input
+                        ref={resumeInputRef}
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        hidden
+                        onChange={handleResumeUpload}
+                      />
+                      {resumeError && (
+                        <p className="text-sm text-destructive">{resumeError}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-500/5 p-4">
+                        <div className="flex items-center gap-3">
+                          <FileCheck2 className="h-5 w-5 text-green-600" />
+                          <div>
+                            <p className="font-medium text-sm">{resumeFileName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {resumeProfile.projects.length} projects •{' '}
+                              {resumeProfile.skills.length} skills •{' '}
+                              {resumeProfile.experience.length + resumeProfile.internships.length}{' '}
+                              roles detected
+                            </p>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={clearResume} title="Remove resume">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[...resumeProfile.technologies, ...resumeProfile.skills]
+                          .slice(0, 10)
+                          .map((skill, i) => (
+                            <span
+                              key={i}
+                              className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Your questions will reference these projects and technologies.
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>

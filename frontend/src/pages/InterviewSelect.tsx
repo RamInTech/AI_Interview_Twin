@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -20,10 +20,14 @@ import {
   Layers,
   Sparkles,
   Cpu,
+  FileUp,
+  FileCheck2,
+  X,
+  Loader2,
 } from 'lucide-react';
 import Navbar from '@/components/landing/Navbar';
 import PageTransition from '@/components/PageTransition';
-import { interviewApi, ApiError } from '@/lib/api';
+import { interviewApi, ApiError, ResumeProfile } from '@/lib/api';
 
 const roles = [
   { id: 'Software Development Engineer', label: 'Software Development Engineer (SDE)' },
@@ -123,6 +127,15 @@ const communicationModes = [
   { id: 'voice', label: 'Voice Based' },
 ];
 
+const questionCountOptions = [
+  { id: 'auto', label: 'Auto (recommended per round)' },
+  { id: '3', label: '3 questions' },
+  { id: '5', label: '5 questions' },
+  { id: '7', label: '7 questions' },
+  { id: '10', label: '10 questions' },
+  { id: '12', label: '12 questions' },
+];
+
 const cardVariants = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
@@ -178,7 +191,46 @@ export default function InterviewSelect() {
   const [programmingLanguage, setProgrammingLanguage] = useState<string>('');
   const [difficulty, setDifficulty] = useState<string>('');
   const [communicationMode, setCommunicationMode] = useState<string>('');
+  const [questionCount, setQuestionCount] = useState<string>('auto');
   const [loading, setLoading] = useState(false);
+
+  const [resumeProfile, setResumeProfile] = useState<ResumeProfile | null>(null);
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
+  const [isParsingResume, setIsParsingResume] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  const resumeInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    try {
+      setIsParsingResume(true);
+      setResumeError(null);
+      const { resume_profile } = await interviewApi.parseResume(file);
+      setResumeProfile(resume_profile);
+      setResumeFileName(file.name);
+      // Persist for follow-up question generation during the interview
+      sessionStorage.setItem('resumeProfile', JSON.stringify(resume_profile));
+    } catch (error) {
+      console.error('Resume parsing failed:', error);
+      setResumeError(
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to parse resume. Is the backend running?'
+      );
+    } finally {
+      setIsParsingResume(false);
+    }
+  };
+
+  const clearResume = () => {
+    setResumeProfile(null);
+    setResumeFileName(null);
+    setResumeError(null);
+    sessionStorage.removeItem('resumeProfile');
+  };
 
   const showCodingOptions =
     selectedRounds.includes('DSA') || selectedRounds.includes('Coding');
@@ -221,6 +273,9 @@ export default function InterviewSelect() {
         experience: experienceLevel,
         company_type: 'Service-Based',
         interview_round: interviewRound,
+        ...(resumeProfile ? { resume_profile: resumeProfile } : {}),
+        ...(questionCount !== 'auto' ? { num_questions: Number(questionCount) } : {}),
+        ...(difficulty ? { difficulty } : {}),
       };
 
       const data = await interviewApi.generateQuestions(payload);
@@ -358,6 +413,100 @@ export default function InterviewSelect() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.22 }}
+              className="mb-8"
+            >
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-secondary flex items-center justify-center">
+                      <FileUp className="h-5 w-5 text-secondary-foreground" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">
+                        Personalize with Your Resume
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">(optional)</span>
+                      </CardTitle>
+                      <CardDescription>
+                        Get questions tailored to your projects, skills and experience
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!resumeProfile ? (
+                    <div className="space-y-3">
+                      <button
+                        onClick={() => resumeInputRef.current?.click()}
+                        disabled={isParsingResume}
+                        className="w-full flex items-center justify-center gap-3 p-6 rounded-lg border-2 border-dashed border-border hover:border-primary/50 hover:bg-secondary/50 transition-colors text-muted-foreground"
+                      >
+                        {isParsingResume ? (
+                          <>
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            Analyzing your resume...
+                          </>
+                        ) : (
+                          <>
+                            <FileUp className="h-5 w-5" />
+                            Upload resume (PDF, DOCX or TXT)
+                          </>
+                        )}
+                      </button>
+                      <input
+                        ref={resumeInputRef}
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        hidden
+                        onChange={handleResumeUpload}
+                      />
+                      {resumeError && (
+                        <p className="text-sm text-destructive">{resumeError}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between rounded-lg border border-green-500/30 bg-green-500/5 p-4">
+                        <div className="flex items-center gap-3">
+                          <FileCheck2 className="h-5 w-5 text-green-600" />
+                          <div>
+                            <p className="font-medium text-sm">{resumeFileName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {resumeProfile.projects.length} projects •{' '}
+                              {resumeProfile.skills.length} skills •{' '}
+                              {resumeProfile.experience.length + resumeProfile.internships.length}{' '}
+                              roles detected
+                            </p>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={clearResume} title="Remove resume">
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[...resumeProfile.technologies, ...resumeProfile.skills]
+                          .slice(0, 10)
+                          .map((skill, i) => (
+                            <span
+                              key={i}
+                              className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Your interview questions will reference these projects and technologies.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: 0.25 }}
               className="mb-8"
             >
@@ -451,6 +600,40 @@ export default function InterviewSelect() {
                   </motion.div>
                 ))}
               </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+              className="mb-8"
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Number of Questions</CardTitle>
+                  <CardDescription>
+                    How many questions should this interview have?
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Select value={questionCount} onValueChange={setQuestionCount}>
+                    <SelectTrigger className="w-full md:w-72">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {questionCountOptions.map((opt) => (
+                        <SelectItem key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Auto uses the standard count for the selected round
+                    (HR 6 • Technical 8 • DSA 7 • Coding 5 • Communication 5).
+                  </p>
+                </CardContent>
+              </Card>
             </motion.div>
 
             <AnimatePresence>

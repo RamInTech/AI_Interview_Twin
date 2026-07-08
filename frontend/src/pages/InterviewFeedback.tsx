@@ -28,7 +28,18 @@ import {
   Crosshair,
   GraduationCap,
   Loader2,
+  Video,
+  Eye,
 } from "lucide-react";
+
+const cameraMetricLabels: Record<string, string> = {
+  confidence: "Confidence",
+  facial_expressions: "Facial Expressions",
+  eye_contact: "Eye Contact",
+  head_posture: "Head Pose & Posture",
+  engagement: "Engagement",
+  composure: "Composure",
+};
 
 export default function InterviewFeedback() {
   const [searchParams] = useSearchParams();
@@ -99,6 +110,12 @@ export default function InterviewFeedback() {
     technicalScore !== undefined && technicalScore !== null
       ? `${technicalScore} / 100`
       : "—";
+
+  const cameraPresence = data.camera_presence ?? null;
+  const codingScore = data.coding_score ?? null;
+  const codeSubmissions = data.code_submissions ?? [];
+  const performanceSummary =
+    data.overall_assessment?.performance_summary ?? "";
 
   const strengths =
   data.placement_feedback?.standout_strengths ?? [];
@@ -172,6 +189,11 @@ export default function InterviewFeedback() {
                   Final Interview Score
                 </p>
                 <Progress value={data.final_score} className="h-3 bg-white/30" />
+                {performanceSummary && (
+                  <p className="text-sm text-white/90 max-w-2xl mx-auto leading-relaxed">
+                    {performanceSummary}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -359,6 +381,193 @@ export default function InterviewFeedback() {
                 </Collapsible>
               </CardContent>
             </Card>
+
+            {cameraPresence && (
+              <Card className="border border-white/10 bg-white/75 shadow-xl backdrop-blur dark:bg-slate-900/70">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Video className="h-5 w-5" /> Camera Presence Analysis
+                    </span>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        cameraPresence.overall_score >= 70
+                          ? "bg-green-100 text-green-700"
+                          : cameraPresence.overall_score >= 55
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      {cameraPresence.classification}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className={`text-4xl font-bold ${scoreColor(cameraPresence.overall_score)}`}>
+                      {Math.round(cameraPresence.overall_score)}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{cameraPresence.summary}</p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {Object.entries(cameraPresence.metric_scores ?? {}).map(
+                      ([metric, score]) => (
+                        <div
+                          key={metric}
+                          className="rounded-xl border border-primary/10 bg-primary/5 p-4 space-y-2"
+                        >
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-medium">
+                              {cameraMetricLabels[metric] ?? metric}
+                            </span>
+                            <span className="font-semibold">
+                              {Math.round(score as number)}
+                            </span>
+                          </div>
+                          <Progress value={score as number} className="h-2" />
+                          {cameraPresence.observations?.[metric] && (
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {cameraPresence.observations[metric]}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div>
+                      <p className="flex items-center gap-2 font-medium mb-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" /> On-Camera Strengths
+                      </p>
+                      <ul className="space-y-2 text-sm">
+                        {(cameraPresence.strengths ?? []).map((s: string, i: number) => (
+                          <li key={i} className="flex gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="flex items-center gap-2 font-medium mb-2 text-sm">
+                        <Eye className="h-4 w-4 text-amber-500" /> Areas to Improve
+                      </p>
+                      <ul className="space-y-2 text-sm">
+                        {(cameraPresence.improvements ?? []).map((s: string, i: number) => (
+                          <li key={i} className="flex gap-2">
+                            <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="flex items-center gap-2 font-medium mb-2 text-sm">
+                      <GraduationCap className="h-4 w-4 text-blue-600" /> Presence Coaching
+                    </p>
+                    <ul className="space-y-2 text-sm">
+                      {(cameraPresence.coaching_suggestions ?? []).map((tip: string, i: number) => (
+                        <li key={i} className="flex gap-2">
+                          <TrendingUp className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                          {tip}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {codeSubmissions.length > 0 && (
+              <Card className="border border-white/10 bg-white/75 shadow-xl backdrop-blur dark:bg-slate-900/70">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Code className="h-5 w-5" /> Coding Performance
+                    </span>
+                    {codingScore !== null && (
+                      <span className={`text-2xl font-bold ${scoreColor(codingScore)}`}>
+                        {Math.round(codingScore)} / 100
+                      </span>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {codeSubmissions.map((sub: any, i: number) => (
+                    <div
+                      key={i}
+                      className="rounded-xl border border-primary/10 bg-primary/5 p-4 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-sm">
+                          {sub.problem_title || `Submission ${i + 1}`}
+                          <span className="ml-2 px-2 py-0.5 rounded-full bg-muted text-xs font-normal">
+                            {sub.language}
+                          </span>
+                        </p>
+                        <span
+                          className={`text-xs font-semibold ${
+                            sub.test_summary?.all_passed
+                              ? "text-green-600"
+                              : "text-amber-600"
+                          }`}
+                        >
+                          {sub.test_summary?.passed ?? 0}/{sub.test_summary?.total ?? 0} tests passed
+                        </span>
+                      </div>
+
+                      {sub.evaluation?.verdict && (
+                        <p className="text-sm text-muted-foreground">{sub.evaluation.verdict}</p>
+                      )}
+
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {sub.evaluation?.complexity?.time && (
+                          <span className="px-3 py-1 rounded-full bg-muted font-mono">
+                            Time: {sub.evaluation.complexity.time}
+                          </span>
+                        )}
+                        {sub.evaluation?.complexity?.space && (
+                          <span className="px-3 py-1 rounded-full bg-muted font-mono">
+                            Space: {sub.evaluation.complexity.space}
+                          </span>
+                        )}
+                        {sub.test_summary?.avg_time_ms != null && (
+                          <span className="px-3 py-1 rounded-full bg-muted font-mono">
+                            {sub.test_summary.avg_time_ms} ms avg
+                          </span>
+                        )}
+                      </div>
+
+                      {(sub.evaluation?.issues?.length ?? 0) > 0 && (
+                        <div className="text-sm">
+                          <p className="font-medium mb-1">Issues</p>
+                          <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                            {sub.evaluation.issues.map((s: string, j: number) => (
+                              <li key={j}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {(sub.evaluation?.optimizations?.length ?? 0) > 0 && (
+                        <div className="text-sm">
+                          <p className="font-medium mb-1">Suggested Optimizations</p>
+                          <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                            {sub.evaluation.optimizations.map((s: string, j: number) => (
+                              <li key={j}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <Collapsible>
               <Card className="overflow-hidden border border-white/10 bg-white/70 shadow-xl backdrop-blur dark:bg-slate-900/70">
