@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.interview import router as interview_router
+from app.api.coding import router as coding_router
 
 
 def get_allowed_origins() -> list[str]:
@@ -27,3 +28,4 @@ app.add_middleware(
 )
 
 app.include_router(interview_router)
+app.include_router(coding_router)
