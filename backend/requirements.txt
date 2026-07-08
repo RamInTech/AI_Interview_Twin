@@ -17,6 +17,16 @@ numpy
 soundfile
 imageio-ffmpeg
 
+# Vision (camera presence analysis — face/eye/smile detection)
+opencv-python
+
+# Resume parsing (PDF/DOCX text extraction)
+pypdf
+python-docx
+
+# Code execution HTTP client (Wandbox / self-hosted Piston, coding rounds)
+requests
+
 # NLP (linguistic signal analysis)
 spacy
 # after install, run: python -m spacy download en_core_web_sm
